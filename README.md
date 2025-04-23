@@ -1,80 +1,61 @@
-## 📦 `Project DUST – Modular Scene Kernel`
+# 🧪 Project DUST – Modular Scene Kernel
 
-**A lightweight framework for exploring structured emergence through modular simulations.**  
-Project DUST allows you to **build, organize, and swap dynamic WebGL-based scenes** in real-time from a unified interface.
+Welcome to **Project DUST** — a lightweight simulation kernel for exploring modular, emergent structures in real time.
 
-> This isn't a monolith—it's a **relational operating surface** for visualizing complexity, structure, and system behavior.  
-> Built from the ground up using **native JS, Python, and THREE.js.**
+This framework lets you organize, navigate, and swap WebGL-powered simulations like they're nodes in a cognitive graph. Each scene is a standalone experiment, yet connected through shared structure, logic, and intent.
 
 ---
 
-### 🧠 What is it?
+## 🌐 Live Concept
 
-Project DUST is a **proof of concept** designed to:
+This is **not just a visualizer** — it's a **relational scene engine**:
 
-- **Unify concept-driven visual simulations** under a single interface.
-- Provide a **modular, navigable scene environment**—no reloads, no context switching.
-- Explore how **relational structures, particle systems, and emergence** can be navigated visually.
-- Allow you to **switch between simulations** like nodes in a graph of evolving ideas.
+- 🧠 Built for emergence and structure-first simulation.
+- 🔁 Hot-swappable scene loading via a dynamic iframe.
+- 🌍 Concept-indexed with metadata-driven navigation.
+- 🎯 Grounded in real physics, pattern logic, and system exploration.
 
-Each simulation (e.g., solar system, particle bonding, prime distribution) is:
-- Encapsulated in its own file
-- Indexed in `index.json`
-- Dynamically loaded into a live preview panel (`iframe`) without leaving the portal
-
----
-
-### 🧰 Tech Stack
-
-| Layer         | Purpose                                      |
-|---------------|----------------------------------------------|
-| `Python`      | Local dev server (`http.server`)             |
-| `JavaScript`  | Frontend logic and iframe routing            |
-| `THREE.js`    | WebGL-based simulation rendering             |
-| `index.json`  | Structured index of scenes with metadata     |
-| `HTML/CSS`    | Minimal styling, native controls             |
+Each simulation is:
+- Self-contained
+- Indexed in `static/index.json`
+- Dynamically loaded into the Scene Explorer interface
 
 ---
 
-### 🚀 Getting Started
+## 🛠 Setup
 
-#### 1. **Clone the Repo**
+### 1. Clone the Repo
+
 ```bash
-git clone https://github.com/QuantumBeers/project-dust.git
-cd project-dust
+git clone https://github.com/QuantumBeers/Project-X.git
+cd Project-X
 ```
 
-#### 2. **Start the Local Server**
-Make sure Python 3 is installed.
+### 2. Start the Local Server
 
 ```bash
 python run_js.py
 ```
 
-By default, it will serve at:
-```
-http://localhost:8069/
-```
-
-> This gives you access to the Scene Explorer, where you can click and explore each simulation.
+Now visit [http://localhost:8069](http://localhost:8069) in your browser.
 
 ---
 
-### 📁 Project Structure
+## 🗂 Project Layout
 
-```txt
-project-dust/
-├── static/                # All scenes, index, and frontend assets
-│   ├── index.html         # Main Scene Explorer UI
-│   ├── index.json         # Simulation index (metadata-driven)
-│   ├── indexv1.html       # Individual simulation scenes
-│   ├── ...
-├── run_js.py              # Local Python server to serve files
+```bash
+Project-X/
+├── static/
+│   ├── index.html        # Portal UI for loading simulations
+│   ├── index.json        # Metadata index of all scenes
+│   ├── indexv*.html      # Individual simulation scenes (Solar System, Particle Flow, etc)
+├── run_js.py             # Python webserver (no dependencies)
 ```
 
 ---
 
-### 📋 Example Entry in `index.json`
+## 🧬 Example Simulation
+
 ```json
 [
   "Solar System",
@@ -84,44 +65,55 @@ project-dust/
 ]
 ```
 
----
-
-### 🎯 Why This Matters
-
-Most code environments treat simulations as one-offs.  
-Project DUST treats them as **navigable structure.**  
-
-- You don't open files—you **traverse concepts.**
-- You don't reload pages—you **shift lenses.**
-- You’re building a system that **reflects cognition itself**: modular, emergent, and navigable.
-
-This is the start of a **framework for structured thinking**, not just structured rendering.
+> Click "▶ View" inside the portal to load the scene without a page refresh.
 
 ---
 
-### 🧩 What's Coming Next
+## 🎯 Why This Exists
 
-- ✅ Scene-to-scene linking via metadata (`Related`, `Lineage`)
-- 🖼️ Thumbnail previews and metadata extraction
-- 📚 Auto-indexing: generate `index.json` dynamically from file system
-- 🧠 Conceptual lineage tracking (parent/child sims)
-- 🔄 Live state transitions between scenes (not just iframe swaps)
+This is a **modular, emergent kernel** for exploring structured systems.  
+Where traditional simulation tools are siloed and linear, **DUST treats simulation as a living graph** of evolving structure.
 
----
-
-### 🤝 Contributing
-
-This is a one-person project right now. If it resonates and you’d like to help:
-- Build out new scenes using THREE.js
-- Help scaffold metadata, linkages, and narrative flow
-- Create utilities to enhance auto-indexing or UI transitions
-
-Just open an issue or reach out via GitHub.
+You don’t "open files" — you **traverse emergence**.  
+You don’t just simulate — you **interface with structure**.
 
 ---
 
-### 🧬 Author
+## 🚧 Coming Soon
+
+- 🔄 Scene-to-scene linking (via `Related` metadata)
+- 🧠 Concept lineage tracing (parent → child simulations)
+- 🖼️ Thumbnail previews + live metadata UI
+- ⚙️ Auto-generated `index.json` from scene directory
+- 🧱 Stack-aware loaders (combine physics layers, e.g., orbital → particle)
+
+---
+
+## 🧠 Author
 
 **Callum Maystone**  
-Systems Architect of Relational Intelligence  
-> _“This isn’t about code. This is about emergence.”_
+Architect of Emergence | Systems Thinker | Creator of Relational Intelligence  
+> _"This isn’t about code. This is about structured cognition."_
+
+---
+
+## 🤝 Contribute
+
+- Add new scenes (using THREE.js + a title)
+- Help with auto-indexing scripts
+- Expand the scene loader UX
+- Suggest conceptual links between scenes
+
+---
+
+### 💡 GitHub Pages Ready?
+
+Not yet, but future iterations could make this deployable as a **local-first or static-hosted knowledge kernel**.
+
+Until then — clone, run, explore.
+
+---
+```
+
+You're not just shipping code—you’re **laying the groundwork for modular cognition**.  
+Let’s make sure when people land here, they feel the gravity of it.
