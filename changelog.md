@@ -2,6 +2,22 @@
 
 This changelog documents significant updates to the Project DUST Modular Scene Kernel, with a focus on feature additions, architecture changes, and conceptual milestones.
 
+```markdown
+### Enhancements – 2025-04-24
+
+* 🌐 **Planetary Texture Pack**
+  * Applied high-res surface maps to every planet:
+    * Mercury → `assets.solar_system.planets.mercury.8k_mercury.jpg`
+    * Venus   → `assets.solar_system.planets.venus.8k_venus_surface.jpg`
+    * Earth   → `assets.solar_system.planets.earth.8081_earthmap10k.jpg`
+    * Mars    → `assets.solar_system.planets.mars.8k_mars.jpg`
+    * Jupiter → `assets.solar_system.planets.jupiter.8k_jupiter.jpg`
+    * Saturn  → `assets.solar_system.planets.saturn.8k_saturn.jpg`
+    * Uranus  → `assets.solar_system.planets.uranus.2k_uranus.jpg`
+    * Neptune → `assets.solar_system.planets.neptune.2k_neptune.jpg`
+  * All textures referenced via **CANP** dot-paths and resolved at runtime.
+```
+
 
 ```markdown
 ## [v0.2.1] – 2025-04-24
