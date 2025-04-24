@@ -12,6 +12,8 @@ This changelog documents significant updates to the Project DUST Modular Scene K
 - Added `resolveCANP()` utility logic to support runtime resolution of semantic paths.
 - Now used in Solar System simulation to load Earth texture from:
 
+```
+
 ## [v0.2.0] – 2025-04-24
 
 **🔭 Feature Added: Earth Texture Integration**
@@ -34,8 +36,10 @@ This changelog documents significant updates to the Project DUST Modular Scene K
 **🧱 Refactor: TextureLoader Scope Fix**
 - Moved `const textureLoader = new THREE.TextureLoader()` outside loop to prevent scope issues and improve memory usage.
 
----
+```
 
+---
+```
 ## [v0.1.0] – Initial Launch
 
 **🧪 Initial Framework Release**
@@ -47,7 +51,7 @@ This changelog documents significant updates to the Project DUST Modular Scene K
   - Thermal Interactions
   - Prime Distribution
   - Solar System (baseline)
-
+```
 ---
 
 🧠 *Everything in this register is a reflection of evolving structure.*  
