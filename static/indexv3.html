@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>AtomicSystem Refactored with Tooltip</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    #tooltip {
+      position: absolute;
+      padding: 8px;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      font: 14px sans-serif;
+      pointer-events: none;
+      border-radius: 3px;
+      display: none;
+    }
+  </style>
+
+  <!-- Import map for three, OrbitControls, lil-gui from CDNs -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js",
+      "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/",
+      "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.17.0/dist/lil-gui.esm.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- Tooltip for displaying bond info -->
+  <div id="tooltip"></div>
+
+<script type="module">
+
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import GUI from 'lil-gui';
+
+/*******************************************************
+ * Particle class
+ *******************************************************/
+class Particle {
+  constructor({
+    pos = new THREE.Vector3(),
+    vel = new THREE.Vector3(),
+    mass = 1,
+    charge = 0,
+    temp = 40,
+    type = null
+  } = {}) {
+    this.pos = pos.clone();
+    this.vel = vel.clone();
+    this.mass = mass;
+    this.charge = charge;
+    this.temp = temp; // used for bond break conditions
+    this.type = type; // e.g. "A","U","C","G","generic"
+
+    // adjacency: array of { particle, restLength, baseStrength, currentStrength }
+    this.bonds = [];
+  }
+
+  applyForce(force) {
+    // a = F/m
+    const a = force.clone().divideScalar(this.mass);
+    this.vel.add(a);
+  }
+
+  calculateBondForces() {
+    for (let bond of this.bonds) {
+      const other = bond.particle;
+      // vector from me to other
+      const dx = other.pos.x - this.pos.x;
+      const dy = other.pos.y - this.pos.y;
+      const dz = other.pos.z - this.pos.z;
+      const distSq = dx*dx + dy*dy + dz*dz;
+      if(distSq < 1e-10) continue;
+      const dist = Math.sqrt(distSq);
+      const overlap = dist - bond.restLength;
+
+      const k = bond.currentStrength ?? bond.baseStrength;
+      // F = -k * overlap
+      const forceMag = -k * overlap;
+
+      const nx = dx/dist, ny= dy/dist, nz= dz/dist;
+      this.applyForce(new THREE.Vector3(nx, ny, nz).multiplyScalar(forceMag));
+    }
+  }
+
+  update(friction=0.99) {
+    // mild damping
+    this.vel.multiplyScalar(friction);
+    this.pos.add(this.vel);
+  }
+}
+
+/*******************************************************
+ * AtomicSystem class
+ *******************************************************/
+class AtomicSystem {
+  constructor(config = {}) {
+    this.config = {
+      bondThreshold: 10,
+      bondBreakDistMin: 12,
+      bondBreakDistMax: 15,
+      bondTempBreak: 80,
+      bondStrengthBase: 0.05,
+      bondBreakVelDamp: 0.7,
+      electrostaticFactor: 0.02,
+      friction: 0.95,
+      ...config
+    };
+    this.particles = [];
+  }
+
+  addParticle(options={}) {
+    const p = new Particle(options);
+    this.particles.push(p);
+    return p;
+  }
+
+  // checks if p1 is already bonded to p2
+  alreadyBonded(p1, p2){
+    return p1.bonds.some(b => b.particle=== p2);
+  }
+
+  // degrade/break existing bonds, form new ones if dist < threshold
+  updateBonds() {
+    const c= this.config;
+    // degrade
+    for(let i=0; i<this.particles.length; i++){
+      const pi= this.particles[i];
+      for(let b= pi.bonds.length-1; b>=0; b--){
+        const bond= pi.bonds[b];
+        const pj= bond.particle;
+        // compute distance
+        const dx= pj.pos.x - pi.pos.x;
+        const dy= pj.pos.y - pi.pos.y;
+        const dz= pj.pos.z - pi.pos.z;
+        const dist= Math.sqrt(dx*dx + dy*dy + dz*dz);
+
+        // if temp or distance break
+        if(pi.temp> c.bondTempBreak || pj.temp> c.bondTempBreak) {
+          this.breakBond(pi, pj);
+          continue;
+        }
+        if(dist> c.bondBreakDistMax){
+          // snap
+          this.breakBond(pi, pj);
+        } else if(dist> c.bondBreakDistMin){
+          // degrade
+          const range= c.bondBreakDistMax - c.bondBreakDistMin;
+          const distOver= dist - c.bondBreakDistMin;
+          const degrade= 1 - (distOver/ range);
+          if(degrade<=0) {
+            this.breakBond(pi, pj);
+          } else {
+            bond.currentStrength= degrade* bond.baseStrength;
+          }
+        } else {
+          // fully strong
+          bond.currentStrength= bond.baseStrength;
+        }
+      }
+    }
+
+    // form new
+    const thrSq= c.bondThreshold*c.bondThreshold;
+    for(let i=0; i<this.particles.length;i++){
+      const pi= this.particles[i];
+      for(let j=i+1;j<this.particles.length;j++){
+        const pj= this.particles[j];
+        const dx= pi.pos.x- pj.pos.x;
+        const dy= pi.pos.y- pj.pos.y;
+        const dz= pi.pos.z- pj.pos.z;
+        const dist2= dx*dx+ dy*dy+ dz*dz;
+        if(dist2< thrSq){
+          if(pi.temp< c.bondTempBreak && pj.temp< c.bondTempBreak){
+            // check if not bonded
+            if(!this.alreadyBonded(pi,pj)){
+              const dist= Math.sqrt(dist2);
+              pi.bonds.push({
+                particle: pj,
+                restLength: dist,
+                baseStrength: c.bondStrengthBase,
+                currentStrength: c.bondStrengthBase
+              });
+              pj.bonds.push({
+                particle: pi,
+                restLength: dist,
+                baseStrength: c.bondStrengthBase,
+                currentStrength: c.bondStrengthBase
+              });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  breakBond(p1, p2){
+    const arr1= p1.bonds;
+    const idx1= arr1.findIndex(b=> b.particle=== p2);
+    if(idx1>=0) arr1.splice(idx1,1);
+
+    const arr2= p2.bonds;
+    const idx2= arr2.findIndex(b=> b.particle=== p1);
+    if(idx2>=0) arr2.splice(idx2,1);
+
+    // velocity damping
+    p1.vel.multiplyScalar(this.config.bondBreakVelDamp);
+    p2.vel.multiplyScalar(this.config.bondBreakVelDamp);
+  }
+
+  applyElectrostatic() {
+    const factor= this.config.electrostaticFactor;
+    if(factor<=0) return;
+    // naive O(n^2)
+    for(let i=0;i<this.particles.length;i++){
+      const pi= this.particles[i];
+      for(let j=i+1;j<this.particles.length;j++){
+        const pj= this.particles[j];
+        const dx= pi.pos.x- pj.pos.x;
+        const dy= pi.pos.y- pj.pos.y;
+        const dz= pi.pos.z- pj.pos.z;
+        const dist2= dx*dx+ dy*dy+ dz*dz;
+        if(dist2<1e-9) continue;
+        if(dist2< this.config.bondThreshold*this.config.bondThreshold){
+          const rep= factor/dist2;
+          const dist= Math.sqrt(dist2);
+          const nx= dx/dist, ny= dy/dist, nz= dz/dist;
+          pi.applyForce(new THREE.Vector3(nx,ny,nz).multiplyScalar(rep));
+          pj.applyForce(new THREE.Vector3(nx,ny,nz).multiplyScalar(-rep));
+        }
+      }
+    }
+  }
+
+  update() {
+    // degrade existing, form new
+    this.updateBonds();
+    // electrostatic
+    this.applyElectrostatic();
+    // bond forces
+    for(let p of this.particles){
+      p.calculateBondForces();
+    }
+    // update each
+    for(let p of this.particles){
+      p.update(this.config.friction);
+    }
+  }
+
+  getPositions(){
+    return this.particles.map(p => p.pos);
+  }
+}
+
+// BFS to find entire cluster size
+function getClusterSize(particle) {
+  const visited = new Set();
+  const stack = [particle];
+  while(stack.length){
+    const current= stack.pop();
+    if(visited.has(current)) continue;
+    visited.add(current);
+    for(let b of current.bonds){
+      if(!visited.has(b.particle)) {
+        stack.push(b.particle);
+      }
+    }
+  }
+  return visited.size;
+}
+
+/****************************************************
+ * 7) SCENE
+ ****************************************************/
+const scene3 = new THREE.Scene();
+scene3.background= new THREE.Color(0x222222);
+const camera3= new THREE.PerspectiveCamera(75,window.innerWidth/window.innerHeight,0.1,1000);
+camera3.position.set(0,50,150);
+
+const renderer3= new THREE.WebGLRenderer({antialias:true});
+renderer3.setSize(window.innerWidth,window.innerHeight);
+document.body.appendChild(renderer3.domElement);
+
+const controls3= new OrbitControls(camera3, renderer3.domElement);
+controls3.enableDamping= true;
+controls3.update();
+
+// We'll do a big wireframe box
+const containerGeo= new THREE.BoxGeometry(100,100,100);
+const containerMat= new THREE.MeshBasicMaterial({wireframe:true, color:0xffffff});
+const container= new THREE.Mesh(containerGeo, containerMat);
+container.position.y= 50;
+scene3.add(container);
+
+/****************************************************
+ * 8) CREATE SYSTEM + PARTICLES
+ ****************************************************/
+const system= new AtomicSystem({
+  bondThreshold: 10,
+  bondBreakDistMin: 12,
+  bondBreakDistMax: 15,
+  bondTempBreak:80,
+  bondStrengthBase: 0.03,
+  bondBreakVelDamp:0.7,
+  electrostaticFactor:0.02,
+  friction:0.95
+});
+
+// We'll add ~ 50 particles
+const positionsArray= new Float32Array(50*3);
+for(let i=0; i<50; i++){
+  const px= (Math.random()-0.5)*80;
+  const py= Math.random()*50 + 50; // above ground
+  const pz= (Math.random()-0.5)*80;
+  system.addParticle({
+    pos: new THREE.Vector3(px,py,pz),
+    vel: new THREE.Vector3(0,0,0),
+    mass:1,
+    temp: 40
+  });
+  positionsArray[i*3]= px;
+  positionsArray[i*3+1]= py;
+  positionsArray[i*3+2]= pz;
+}
+
+// Make a Points object to visualize them
+const partGeo= new THREE.BufferGeometry();
+partGeo.setAttribute('position', new THREE.BufferAttribute(positionsArray,3));
+const partMat= new THREE.PointsMaterial({ color:0x00ffdd, size:4, alphaTest:0.5 });
+const partPoints= new THREE.Points(partGeo, partMat);
+scene3.add(partPoints);
+
+// We'll also do a lines geometry for bonds
+const bondPositions= [];
+const bondGeo= new THREE.BufferGeometry();
+bondGeo.setAttribute('position', new THREE.Float32BufferAttribute(bondPositions,3));
+const bondMat= new THREE.LineBasicMaterial({color:0xff4444});
+const bondLines= new THREE.LineSegments(bondGeo, bondMat);
+scene3.add(bondLines);
+
+// gather segments from system
+function buildBondSegments(){
+  const segs=[];
+  for(let i=0; i< system.particles.length; i++){
+    const pi= system.particles[i];
+    for(let bond of pi.bonds){
+      const pj= bond.particle;
+      // skip duplicates
+      if(system.particles.indexOf(pj)> i){
+        segs.push(
+          pi.pos.x, pi.pos.y, pi.pos.z,
+          pj.pos.x, pj.pos.y, pj.pos.z
+        );
+      }
+    }
+  }
+  return segs;
+}
+
+/****************************************************
+ * 9) HOVER TOOLTIP
+ ****************************************************/
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip'); // a <div> in your HTML
+
+window.addEventListener('pointermove', onPointerMove);
+
+function onPointerMove(event) {
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera3);
+  const intersects = raycaster.intersectObject(partPoints);
+
+  if (intersects.length > 0) {
+    const intersectPos = intersects[0].point;
+
+    // find the closest particle
+    let bestIndex = -1, bestDist= Infinity;
+    for(let i=0; i< system.particles.length; i++){
+      const p= system.particles[i];
+      const dx= p.pos.x- intersectPos.x;
+      const dy= p.pos.y- intersectPos.y;
+      const dz= p.pos.z- intersectPos.z;
+      const dist2= dx*dx + dy*dy + dz*dz;
+      if(dist2< bestDist){
+        bestDist= dist2;
+        bestIndex= i;
+      }
+    }
+
+    if(bestIndex>=0){
+      const hovered= system.particles[bestIndex];
+      const directBonds= hovered.bonds.length;
+      const clusterSize= getClusterSize(hovered);
+
+      tooltip.style.left= (event.clientX+10) +"px";
+      tooltip.style.top = (event.clientY+10) +"px";
+      tooltip.innerHTML= `
+        <b>Particle #${bestIndex}</b><br>
+        Direct bonds: ${directBonds}<br>
+        Cluster size: ${clusterSize}
+      `;
+      tooltip.style.display= "block";
+    }
+  } else {
+    tooltip.style.display= "none";
+  }
+}
+
+/****************************************************
+ * 10) GUI
+ ****************************************************/
+
+const gui= new GUI();
+gui.add(system.config, 'bondThreshold',5,20,1).name("BondDist");
+gui.add(system.config, 'bondBreakDistMin',6,14,1).name("BreakMin");
+gui.add(system.config, 'bondBreakDistMax',8,30,1).name("BreakMax");
+gui.add(system.config, 'bondTempBreak',30,150,5).name("BondTempBreak");
+gui.add(system.config, 'bondStrengthBase',0.01,0.1,0.01).name("BondK");
+gui.add(system.config, 'bondBreakVelDamp',0,1,0.1).name("BreakVelDamp");
+gui.add(system.config, 'electrostaticFactor',0,0.1,0.01).name("Electrostatic");
+gui.add(system.config, 'friction',0.5,1,0.01).name("Friction");
+
+/****************************************************
+ * 11) ANIMATE
+ ****************************************************/
+function animate(){
+  requestAnimationFrame(animate);
+  controls3.update();
+
+  // update system
+  system.update();
+
+  // copy positions to geometry
+  const arr= partGeo.attributes.position.array;
+  for(let i=0; i< system.particles.length; i++){
+    const p= system.particles[i];
+    arr[i*3  ]= p.pos.x;
+    arr[i*3+1]= p.pos.y;
+    arr[i*3+2]= p.pos.z;
+  }
+  partGeo.attributes.position.needsUpdate= true;
+
+  // bond lines
+  const segments= buildBondSegments();
+  bondGeo.setAttribute('position', new THREE.Float32BufferAttribute(segments,3));
+  bondGeo.attributes.position.needsUpdate= true;
+  bondGeo.setDrawRange(0, segments.length/3);
+
+  // render
+  renderer3.render(scene3, camera3);
+}
+animate();
+
+/****************************************************
+ * 12) RESIZE
+ ****************************************************/
+window.addEventListener('resize', ()=>{
+  camera3.aspect= window.innerWidth/window.innerHeight;
+  camera3.updateProjectionMatrix();
+  renderer3.setSize(window.innerWidth, window.innerHeight);
+});
+
+</script>
+</body>
+</html>

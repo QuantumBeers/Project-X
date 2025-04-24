@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Prime Visualizer – Dual Sphere w/ Heatmap</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #111; color: white; }
+    #tooltip {
+      position: absolute;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      font: 13px sans-serif;
+      pointer-events: none;
+      border-radius: 4px;
+      display: none;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js",
+      "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/",
+      "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.17.0/dist/lil-gui.esm.js"
+    }
+  }
+  </script>
+</head>
+<body>
+<div id="tooltip"></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import GUI from 'lil-gui';
+
+/****************************************************
+ * Utility Functions
+ ****************************************************/
+function isPrime(n) {
+  if (n < 2) return false;
+  for (let i = 2, s = Math.sqrt(n); i <= s; i++) {
+    if (n % i === 0) return false;
+  }
+  return true;
+}
+
+function getMod6Class(n) {
+  const mod = n % 6;
+  if (mod === 1) return '6k+1';
+  if (mod === 5) return '6k-1';
+  return `6k+${mod}`;
+}
+
+// Quick function to count prime factors (for the heatmap)
+function primeFactorCount(n) {
+  if (n < 2) return 0;
+  let count = 0;
+  let x = n;
+  for (let f = 2; f * f <= x; f++) {
+    while (x % f === 0) {
+      count++;
+      x /= f;
+    }
+  }
+  if (x > 1) count++;
+  return count;
+}
+
+// Layout logic
+function layoutShells(nodes, radFactor, phiInc, thetaInc) {
+  let phi = 0;
+  let theta = 0;
+
+  nodes.forEach((node, i) => {
+    const r = radFactor * Math.sqrt(i + 1);
+    phi += phiInc;
+    theta += thetaInc;
+    phi %= Math.PI;
+    theta %= (Math.PI * 2);
+
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.sin(phi) * Math.sin(theta);
+    const z = r * Math.cos(phi);
+    node.position.set(x, y, z);
+  });
+}
+
+/****************************************************
+ * Data Structures
+ ****************************************************/
+
+// Node for prime distribution
+class PrimeNode {
+  constructor(n) {
+    this.n = n;
+    this.isPrime = isPrime(n);
+    this.mod6 = getMod6Class(n);
+    this.position = new THREE.Vector3();
+  }
+}
+
+// Node for the heatmap
+class HeatmapNode {
+  constructor(n) {
+    this.n = n;
+    this.factors = primeFactorCount(n); // how many prime factors
+    this.position = new THREE.Vector3();
+  }
+}
+
+class PrimeNetwork {
+  constructor(count = 1000) {
+    this.nodes = [];
+    // Only push 6k ± 1, starting from 5
+    for (let i = 5; i <= count; i++) {
+      if (i % 6 === 1 || i % 6 === 5) {
+        this.nodes.push(new PrimeNode(i));
+      }
+    }
+  }
+}
+
+class HeatmapNetwork {
+  constructor(count = 1000) {
+    this.nodes = [];
+    for (let i = 1; i <= count; i++) {
+      this.nodes.push(new HeatmapNode(i));
+    }
+  }
+}
+
+/****************************************************
+ * Scene Setup
+ ****************************************************/
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  3000
+);
+camera.position.set(0, 80, 300);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+// Create two networks
+const primeNet = new PrimeNetwork(1000);
+const heatmapNet = new HeatmapNetwork(1000);
+
+// Create two groups
+const groupPrime = new THREE.Group();
+const groupHeatmap = new THREE.Group();
+
+// Offset them in X so both are in the same scene
+// so rotating camera shows them side by side
+// Adjust to taste
+const OFFSET_X = 100;
+
+// We'll put prime net on left, heatmap on right
+groupPrime.position.x = -OFFSET_X;
+groupHeatmap.position.x = +OFFSET_X;
+
+scene.add(groupPrime);
+scene.add(groupHeatmap);
+
+
+// Build Meshes from primeNet
+function buildPrimeMeshes() {
+  // Clear old
+  while (groupPrime.children.length) {
+    groupPrime.remove(groupPrime.children[0]);
+  }
+
+  const geometry = new THREE.SphereGeometry(0.5, 8, 8);
+
+  primeNet.nodes.forEach(node => {
+    let color = node.isPrime ? 0x00ff00 : 0xff0055;
+
+    // highlight 6k if needed
+    if (params.highlight6k && (node.mod6 === '6k+1' || node.mod6 === '6k-1')) {
+      color = 0xffff00;
+    }
+
+    // hide composite if showComposites=false, or hide prime if showPrimes=false
+    // We'll handle that in updateVisibility instead.
+
+    const mat = new THREE.MeshBasicMaterial({ color });
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.position.copy(node.position);
+    mesh.userData = node;
+    groupPrime.add(mesh);
+  });
+}
+
+// Build Meshes from heatmapNet
+function buildHeatmapMeshes() {
+  while (groupHeatmap.children.length) {
+    groupHeatmap.remove(groupHeatmap.children[0]);
+  }
+
+  const geometry = new THREE.SphereGeometry(0.5, 8, 8);
+
+  heatmapNet.nodes.forEach(node => {
+    const fc = Math.min(node.factors, 6); // clamp to 6
+    // Lerp from green(=0) to red(=6)
+    const t = fc / 6;
+    const r = Math.round((1 - t) * 0x00 + t * 0xff);
+    const g = Math.round((1 - t) * 0xff + t * 0x00);
+    const b = 0x00;
+    const color = (r << 16) | (g << 8) | (b);
+
+    const mat = new THREE.MeshBasicMaterial({ color });
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.position.copy(node.position);
+    mesh.userData = node; // store the node for tooltip
+    groupHeatmap.add(mesh);
+  });
+}
+
+// Layout + Rebuild both sets
+function applyLayout() {
+  // apply shell layout to primeNet
+  layoutShells(
+    primeNet.nodes,
+    params.shellRadFactor,
+    params.shellPhiInc,
+    params.shellThetaInc
+  );
+
+  layoutShells(
+    heatmapNet.nodes,
+    params.shellRadFactor,
+    params.shellPhiInc,
+    params.shellThetaInc
+  );
+
+  // rebuild
+  buildPrimeMeshes();
+  buildHeatmapMeshes();
+}
+
+function updateNodePositions() {
+  // update prime group
+  groupPrime.children.forEach((mesh, i) => {
+    const node = primeNet.nodes[i];
+    mesh.position.copy(node.position);
+  });
+  // update heatmap group
+  groupHeatmap.children.forEach((mesh, i) => {
+    const node = heatmapNet.nodes[i];
+    mesh.position.copy(node.position);
+  });
+}
+
+function updateVisibility() {
+  // prime group
+  groupPrime.children.forEach(mesh => {
+    const node = mesh.userData;
+    let visible = true;
+    if (!params.showPrimes && node.isPrime) {
+      visible = false;
+    }
+    if (!params.showComposites && !node.isPrime) {
+      visible = false;
+    }
+    mesh.visible = visible;
+  });
+}
+
+/****************************************************
+ * Shared Tooltip
+ ****************************************************/
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+
+window.addEventListener('pointermove', (event) => {
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+});
+
+function updateTooltip() {
+  // Combine both group meshes
+  const allMeshes = [
+    ...groupPrime.children,
+    ...groupHeatmap.children
+  ];
+
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(allMeshes);
+  if (intersects.length > 0) {
+    const node = intersects[0].object.userData;
+
+    // if it's prime node
+    if (node.isPrime !== undefined) {
+      tooltip.innerHTML = `\n        <b>n = ${node.n}</b><br>\n        Prime: ${node.isPrime}\n      `;
+    }
+    // if it's heatmap node
+    else if (node.factors !== undefined) {
+      tooltip.innerHTML = `\n        <b>n = ${node.n}</b><br>\n        PrimeFactorCount: ${node.factors}\n      `;
+    }
+
+    tooltip.style.left = (event.clientX + 10) + 'px';
+    tooltip.style.top = (event.clientY + 10) + 'px';
+    tooltip.style.display = 'block';
+  } else {
+    tooltip.style.display = 'none';
+  }
+}
+
+/****************************************************
+ * Params + GUI
+ ****************************************************/
+const params = {
+  shellRadFactor: 2.0,
+  shellPhiInc: 0.3,
+  shellThetaInc: 0.15,
+
+  highlight6k: false,
+  showPrimes: true,
+  showComposites: true,
+};
+
+const gui = new GUI();
+
+gui.add(params, 'shellRadFactor', 0.1, 5.0, 0.1).name('Shell Rad').onChange(() => {
+  applyLayout();
+});
+
+gui.add(params, 'shellPhiInc', 0.01, 1.0, 0.01).name('Shell Phi').onChange(() => {
+  applyLayout();
+});
+
+gui.add(params, 'shellThetaInc', 0.01, 1.0, 0.01).name('Shell Theta').onChange(() => {
+  applyLayout();
+});
+
+// Filters
+gui.add(params, 'showPrimes').onChange(() => {
+  updateVisibility();
+});
+
+gui.add(params, 'showComposites').onChange(() => {
+  updateVisibility();
+});
+
+gui.add(params, 'highlight6k').onChange(() => {
+  // Rebuild prime sphere so color changes apply
+  buildPrimeMeshes();
+  updateVisibility();
+});
+
+/****************************************************
+ * Init + Animate
+ ****************************************************/
+applyLayout();
+updateVisibility();
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  updateTooltip();
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Prime Visualizer – Sacred Geometry of Numbers</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #111; color: white; }
+    #tooltip {
+      position: absolute;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      font: 13px sans-serif;
+      pointer-events: none;
+      border-radius: 4px;
+      display: none;
+    }
+  </style>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js",
+      "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/",
+      "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.17.0/dist/lil-gui.esm.js"
+    }
+  }
+  </script>
+</head>
+<body>
+<div id="tooltip"></div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import GUI from 'lil-gui';
+
+/****************************************************
+ * Prime Utilities
+ ****************************************************/
+function isPrime(n) {
+  if (n < 2) return false;
+  for (let i = 2, s = Math.sqrt(n); i <= s; i++) {
+    if (n % i === 0) return false;
+  }
+  return true;
+}
+
+function getMod6Class(n) {
+  const mod = n % 6;
+  if (mod === 1) return '6k+1';
+  if (mod === 5) return '6k-1';
+  return `6k+${mod}`;
+}
+
+/****************************************************
+ * PrimeNode and PrimeNetwork
+ ****************************************************/
+class PrimeNode {
+  constructor(n) {
+    this.n = n;
+    this.isPrime = isPrime(n);
+    this.mod6 = getMod6Class(n);
+    this.position = new THREE.Vector3();
+  }
+}
+
+class PrimeNetwork {
+  constructor(count = 1000) {
+    this.nodes = [];
+    for (let i = 5; i <= count; i++) {
+    if (i % 6 === 1 || i % 6 === 5) {
+      this.nodes.push(new PrimeNode(i));
+  }
+}
+
+  }
+
+  // Linear layout
+  layoutLinear(spacing = 1.2) {
+    this.nodes.forEach((node, i) => {
+      node.position.set(i * spacing, 0, 0);
+    });
+  }
+
+  // Spiral layout (2D spiral for now)
+  layoutSpiral(radiusFactor = 0.5, angleStep = 0.3) {
+    this.nodes.forEach((node, i) => {
+      const angle = i * angleStep;
+      const r = radiusFactor * angle;
+      node.position.set(
+        r * Math.cos(angle),
+        0,  // keep everything on y=0 for simplicity
+        r * Math.sin(angle)
+      );
+    });
+  }
+
+  layoutSpiral(radiusFactor = 0.5, angleStep = 0.3, density = 1.0) {
+    this.nodes.forEach((node, i) => {
+      const angle = i * angleStep * density; // 🧠 more density = faster angle progression
+      const r = radiusFactor * angle;
+      node.position.set(
+        r * Math.cos(angle),
+        0,
+        r * Math.sin(angle)
+      );
+    });
+  }
+
+
+  // Shell / spherical layout
+  layoutShells(shellSize = 2.0, angleIncrement = 0.3) {
+    let phi = 0;
+    let theta = 0;
+
+    this.nodes.forEach((node, i) => {
+      // radius grows with sqrt of i+1
+      const r = shellSize * Math.sqrt(i + 1);
+      // increment angles
+      phi += angleIncrement;
+      theta += angleIncrement / 2;
+
+      // keep angles within range
+      phi = phi % Math.PI;
+      theta = theta % (Math.PI * 2);
+
+      // spherical -> cartesian
+      const x = r * Math.sin(phi) * Math.cos(theta);
+      const y = r * Math.sin(phi) * Math.sin(theta);
+      const z = r * Math.cos(phi);
+
+      node.position.set(x, y, z);
+    });
+  }
+}
+
+/****************************************************
+ * Scene Setup
+ ****************************************************/
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x111111);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+camera.position.set(0, 20, 120);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+
+/****************************************************
+ * Create Prime Network & Meshes
+ ****************************************************/
+// Default to first 1000 numbers
+const network = new PrimeNetwork(1000);
+
+// We'll add flexible parameters for layout, etc.
+const params = {
+  layoutMode: 'linear',
+  linearSpacing: 1.0,
+  spiralRadius: 0.5,
+  spiralAngleStep: 0.3,
+  shellSize: 2.0,
+  shellAngleInc: 0.3,
+  highlight6k: false,
+  showPrimes: true,
+  showComposites: true,
+  densityFactor: 1.0, // 🧩 NEW
+};
+
+function applyLayout() {
+  switch (params.layoutMode) {
+    case 'linear':
+      network.layoutLinear(params.linearSpacing);
+      break;
+    case 'spiral':
+      network.layoutSpiral(params.spiralRadius, params.spiralAngleStep);
+      break;
+    case 'shells':
+      network.layoutShells(params.shellSize, params.shellAngleInc);
+      break;
+  }
+}
+
+// Initial layout
+applyLayout();
+
+// Create geometry
+const geometry = new THREE.SphereGeometry(0.5, 8, 8);
+const group = new THREE.Group();
+
+network.nodes.forEach(node => {
+  // Basic color assignment: prime vs composite
+  const mat = new THREE.MeshBasicMaterial({ color: node.isPrime ? 0x00ff00 : 0xff0055 });
+  const mesh = new THREE.Mesh(geometry, mat);
+  mesh.position.copy(node.position);
+  mesh.userData = node;
+  group.add(mesh);
+});
+
+scene.add(group);
+
+function updateNodePositions() {
+  group.children.forEach((mesh, i) => {
+    mesh.position.copy(network.nodes[i].position);
+  });
+}
+
+function updateVisibility() {
+  group.children.forEach(mesh => {
+    const node = mesh.userData;
+    if (!params.showPrimes && node.isPrime) {
+      mesh.visible = false;
+      return;
+    }
+    if (!params.showComposites && !node.isPrime) {
+      mesh.visible = false;
+      return;
+    }
+    mesh.visible = true;
+  });
+}
+
+function updateHighlight6k() {
+  group.children.forEach(mesh => {
+    const node = mesh.userData;
+    let color = node.isPrime ? 0x00ff00 : 0xff0055;
+
+    if (params.highlight6k && (node.mod6 === '6k+1' || node.mod6 === '6k-1')) {
+      color = 0xffff00; // highlight
+    }
+
+    mesh.material.color.set(color);
+  });
+}
+
+/****************************************************
+ * Tooltip on Hover
+ ****************************************************/
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+
+window.addEventListener('pointermove', (event) => {
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+});
+
+function updateTooltip() {
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(group.children);
+  if (intersects.length > 0) {
+    const node = intersects[0].object.userData;
+    tooltip.innerHTML = `\n      <b>n = ${node.n}</b><br>\n      Prime: ${node.isPrime}<br>\n      Mod 6: ${node.mod6}\n    `;
+    tooltip.style.left = (event.clientX + 10) + 'px';
+    tooltip.style.top = (event.clientY + 10) + 'px';
+    tooltip.style.display = 'block';
+  } else {
+    tooltip.style.display = 'none';
+  }
+}
+
+/****************************************************
+ * GUI
+ ****************************************************/
+const gui = new GUI();
+
+// Layout Folder
+const layoutFolder = gui.addFolder('Layout');
+layoutFolder.add(params, 'layoutMode', ['linear', 'spiral', 'shells']).onChange(() => {
+  applyLayout();
+  updateNodePositions();
+});
+layoutFolder.add(params, 'linearSpacing', 0.5, 2, 0.1).name('Linear Spacing').onChange(() => {
+  if (params.layoutMode === 'linear') {
+    applyLayout();
+    updateNodePositions();
+  }
+});
+layoutFolder.add(params, 'spiralRadius', 0.1, 2, 0.1).name('Spiral Radius').onChange(() => {
+  if (params.layoutMode === 'spiral') {
+    applyLayout();
+    updateNodePositions();
+  }
+});
+layoutFolder.add(params, 'spiralAngleStep', 0.1, 1, 0.1).name('Spiral Step').onChange(() => {
+  if (params.layoutMode === 'spiral') {
+    applyLayout();
+    updateNodePositions();
+  }
+});
+layoutFolder.add(params, 'shellSize', 0.5, 5, 0.1).name('Shell Size').onChange(() => {
+  if (params.layoutMode === 'shells') {
+    applyLayout();
+    updateNodePositions();
+  }
+});
+layoutFolder.add(params, 'shellAngleInc', 0.1, 1, 0.1).name('Shell Angle').onChange(() => {
+  if (params.layoutMode === 'shells') {
+    applyLayout();
+    updateNodePositions();
+  }
+});
+
+// Filters Folder
+const filterFolder = gui.addFolder('Filters');
+filterFolder.add(params, 'showPrimes').onChange(() => {
+  updateVisibility();
+});
+filterFolder.add(params, 'showComposites').onChange(() => {
+  updateVisibility();
+});
+filterFolder.add(params, 'highlight6k').onChange(() => {
+  updateHighlight6k();
+});
+
+/****************************************************
+ * Animation
+ ****************************************************/
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  updateTooltip();
+  renderer.render(scene, camera);
+}
+animate();
+
+/****************************************************
+ * Resize Handling
+ ****************************************************/
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Initial calls
+updateVisibility();
+updateHighlight6k();
+</script>
+</body>
+</html>

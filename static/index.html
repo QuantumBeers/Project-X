@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Atomic Bonds Graph Sim (Gentler Break)</title>
+  <style>
+    body { margin:0; overflow:hidden; }
+  </style>
+
+  <!-- Import map for three, OrbitControls, lil-gui from CDNs -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.module.js",
+      "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.153.0/examples/jsm/",
+      "lil-gui": "https://cdn.jsdelivr.net/npm/lil-gui@0.17.0/dist/lil-gui.esm.js"
+    }
+  }
+  </script>
+</head>
+<body>
+<script type="module">
+
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import GUI from 'lil-gui';
+
+/****************************************************
+ * 1) SCENE SETUP
+ ****************************************************/
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x202020);
+
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 2000);
+camera.position.set(0,120,300);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping=true;
+controls.update();
+
+/****************************************************
+ * 2) ROTATING CONTAINER
+ ****************************************************/
+const cubeSize = 100;
+const boxGeo = new THREE.BoxGeometry(cubeSize,cubeSize,cubeSize);
+const boxMat = new THREE.MeshBasicMaterial({ wireframe:true, color:0xffffff });
+const rotatingCube= new THREE.Mesh(boxGeo, boxMat);
+rotatingCube.position.y= 100;
+scene.add(rotatingCube);
+
+/****************************************************
+ * 3) PARTICLE DATA
+ ****************************************************/
+const numFree = 100;        // free-floating
+const numCube= 1000;        // inside cube
+const positionsFree = new Float32Array(numFree*3);
+const velocitiesFree = new Float32Array(numFree*3).fill(0);
+const temperaturesFree = new Float32Array(numFree).fill(50); // toy example
+
+const positionsCube= new Float32Array(numCube*3);
+const velocitiesCube= new Float32Array(numCube*3).fill(0);
+const temperaturesCube= new Float32Array(numCube).fill(50);
+
+// adjacency: bonds[i] = array of { neighbor, restLength, strength }
+const bondsFree = [];
+for(let i=0; i<numFree; i++) bondsFree.push([]);
+const bondsCube = [];
+for(let i=0; i<numCube; i++) bondsCube.push([]);
+
+function randomPos(range=50){
+  return (Math.random()-0.5)* range;
+}
+for(let i=0; i<numFree; i++){
+  const ix=i*3;
+  positionsFree[ix  ]= randomPos(cubeSize);
+  positionsFree[ix+1]= randomPos(cubeSize)+ 50;
+  positionsFree[ix+2]= randomPos(cubeSize);
+}
+for(let i=0; i<numCube; i++){
+  const ix= i*3;
+  positionsCube[ix  ]= randomPos(cubeSize*0.8);
+  positionsCube[ix+1]= randomPos(cubeSize*0.8);
+  positionsCube[ix+2]= randomPos(cubeSize*0.8);
+}
+
+// For rendering
+const freeGeo= new THREE.BufferGeometry();
+freeGeo.setAttribute('position', new THREE.BufferAttribute(positionsFree,3));
+const freeMat= new THREE.PointsMaterial({ color:0x00ffff, size:4, alphaTest:0.5 });
+const freePoints= new THREE.Points(freeGeo, freeMat);
+scene.add(freePoints);
+
+const cubeGeo= new THREE.BufferGeometry();
+cubeGeo.setAttribute('position', new THREE.BufferAttribute(positionsCube,3));
+const cubeMat= new THREE.PointsMaterial({ color:0x00ffff, size:4, alphaTest:0.5 });
+const cubePoints= new THREE.Points(cubeGeo, cubeMat);
+rotatingCube.add(cubePoints);
+
+/****************************************************
+ * 4) BOND VISUALIZATION
+ ****************************************************/
+const bondPositionsFree= [];
+const bondGeoFree= new THREE.BufferGeometry();
+bondGeoFree.setAttribute('position', new THREE.Float32BufferAttribute(bondPositionsFree,3));
+const bondLinesFree= new THREE.LineSegments(bondGeoFree, new THREE.LineBasicMaterial({color:0xff4444}));
+scene.add(bondLinesFree);
+
+const bondPositionsCube= [];
+const bondGeoCube= new THREE.BufferGeometry();
+bondGeoCube.setAttribute('position', new THREE.Float32BufferAttribute(bondPositionsCube,3));
+const bondLinesCube= new THREE.LineSegments(bondGeoCube, new THREE.LineBasicMaterial({color:0xff4444}));
+rotatingCube.add(bondLinesCube);
+
+/****************************************************
+ * 5) PARAMS & GUI
+ ****************************************************/
+
+// We'll define a 'bondBreakDistMin' and 'bondBreakDistMax' range.
+// If distance > bondBreakDistMax => snap immediately
+// If distance > bondBreakDistMin => degrade bond
+const params={
+  gravityY: -0.2,
+  friction: 0.95,
+
+  bondThreshold: 10,     // Dist < => form bond
+  bondBreakDistMin: 12,  // Dist above => degrade
+  bondBreakDistMax: 15,  // Dist above => break
+  bondTempBreak: 80,     // If temp> => break
+  bondStrengthBase: 0.05,
+  bondBreakVelDamp: 0.7  // how much velocity is damped on break
+};
+const gui= new GUI();
+gui.add(params, 'gravityY', -1,0,0.01).name('Gravity Y');
+gui.add(params, 'friction', 0.5,1,0.01).name('Friction');
+gui.add(params, 'bondThreshold',5,20,1).name('BondDist');
+gui.add(params, 'bondBreakDistMin',1,14,1).name('BreakMin');
+gui.add(params, 'bondBreakDistMax',8,30,1).name('BreakMax');
+gui.add(params, 'bondTempBreak',50,150,5).name('BondBreakTemp');
+gui.add(params, 'bondStrengthBase',0.01,0.1,0.01).name('BondSpringK');
+gui.add(params, 'bondBreakVelDamp',0,1,0.1).name('BreakVelDamp');
+
+/****************************************************
+ * 6) UTILS
+ ****************************************************/
+function lengthSq(dx,dy,dz){
+  return dx*dx + dy*dy + dz*dz;
+}
+function clampInsideCube(posArray, velArray, count, radius) {
+  const half= cubeSize*0.5;
+  for(let i=0;i<count;i++){
+    const ix=i*3;
+    for(let c=0;c<3;c++){
+      const idx= ix+c;
+      if(posArray[idx]> half-radius){
+        posArray[idx]= half-radius;
+        velArray[idx]*=-0.5;
+      } else if(posArray[idx]< -half+radius){
+        posArray[idx]= -half+ radius;
+        velArray[idx]*=-0.5;
+      }
+    }
+  }
+}
+
+/****************************************************
+ * 7) BOND FORMATION & PARTIAL BREAK
+ ****************************************************/
+function updateBonds(pos, temps, bonds, count) {
+  const thrSq= params.bondThreshold* params.bondThreshold;
+
+  // break or degrade existing bonds
+  for(let i=0; i<count; i++){
+    const arr= bonds[i];
+    for(let b= arr.length-1; b>=0; b--){
+      const bond= arr[b];
+      const j= bond.neighbor;
+      const ix= i*3, jx= j*3;
+      const dx= pos[ix]- pos[jx];
+      const dy= pos[ix+1]- pos[jx+1];
+      const dz= pos[ix+2]- pos[jx+2];
+      const dist= Math.sqrt(dx*dx+ dy*dy+ dz*dz);
+
+      // if temp too high => break instantly
+      if(temps[i]> params.bondTempBreak || temps[j]> params.bondTempBreak){
+        breakBond(i, j, bonds);
+        // also optionally damp velocity to reduce "explosion"
+        dampVelocityOnBreak(i,j);
+        continue;
+      }
+
+      // if dist> bondBreakDistMax => break instantly
+      if(dist> params.bondBreakDistMax){
+        breakBond(i,j,bonds);
+        dampVelocityOnBreak(i,j);
+      }
+      else if(dist> params.bondBreakDistMin) {
+        // degrade bond strength from 1..0 as dist goes from min..max
+        const range= params.bondBreakDistMax - params.bondBreakDistMin;
+        const distOver= dist- params.bondBreakDistMin;
+        const degrade= 1- (distOver/ range); // e.g. dist= breakDistMin => degrade=1, dist=breakDistMax => degrade=0
+
+        // also degrade if degrade< 0 => break
+        if(degrade<=0){
+          breakBond(i,j,bonds);
+          dampVelocityOnBreak(i,j);
+        } else {
+          // reduce the effective strength
+          bond.currentStrength= degrade* bond.strength;
+        }
+      } else {
+        // distance < bondBreakDistMin => no degrade
+        bond.currentStrength= bond.strength;
+      }
+    }
+  }
+
+  // form new bonds if dist< bondThreshold, temps < bondTempBreak
+  for(let i=0; i<count; i++){
+    const ix= i*3;
+    for(let j=i+1; j<count; j++){
+      const jx= j*3;
+      const dx= pos[ix]- pos[jx];
+      const dy= pos[ix+1]- pos[jx+1];
+      const dz= pos[ix+2]- pos[jx+2];
+      const dist2= dx*dx+ dy*dy+ dz*dz;
+      if(dist2< thrSq){
+        if(temps[i]< params.bondTempBreak && temps[j]< params.bondTempBreak){
+          // check if bond already
+          const arrI= bonds[i];
+          const found= arrI.some(b => b.neighbor=== j);
+          if(!found){
+            const dist= Math.sqrt(dist2);
+            const base= params.bondStrengthBase;
+            arrI.push({ neighbor:j, restLength: dist, strength: base, currentStrength: base });
+            bonds[j].push({ neighbor:i, restLength: dist, strength: base, currentStrength: base });
+          }
+        }
+      }
+    }
+  }
+}
+
+/****************************************************
+ * HELPER: breakBond & dampVelocity
+ ****************************************************/
+function breakBond(i,j,bonds){
+  // remove bond from i-> j
+  const arrI= bonds[i];
+  const idxI= arrI.findIndex(b => b.neighbor=== j);
+  if(idxI>=0) arrI.splice(idxI,1);
+
+  // remove from j-> i
+  const arrJ= bonds[j];
+  const idxJ= arrJ.findIndex(b => b.neighbor=== i);
+  if(idxJ>=0) arrJ.splice(idxJ,1);
+}
+// Slightly reduce velocity so they don't fling
+function dampVelocityOnBreak(i,j){
+  const damp= params.bondBreakVelDamp;
+  velocitiesFree[i*3  ] *= damp; velocitiesFree[i*3+1]*= damp; velocitiesFree[i*3+2]*= damp;
+  velocitiesFree[j*3  ] *= damp; velocitiesFree[j*3+1]*= damp; velocitiesFree[j*3+2]*= damp;
+  velocitiesCube[i*3  ]*= damp;  velocitiesCube[i*3+1]*= damp; velocitiesCube[i*3+2]*= damp;
+  velocitiesCube[j*3  ]*= damp;  velocitiesCube[j*3+1]*= damp; velocitiesCube[j*3+2]*= damp;
+}
+
+/****************************************************
+ * 8) APPLY BOND FORCES
+ ****************************************************/
+function applyBondForces(pos, vel, bonds, temps, count){
+  for(let i=0; i<count; i++){
+    const arr= bonds[i];
+    const ix= i*3;
+    for(let bond of arr){
+      if(bond.neighbor< i) continue;
+      const j= bond.neighbor;
+      const jx= j*3;
+      const dx= pos[ix]   - pos[jx];
+      const dy= pos[ix+1] - pos[jx+1];
+      const dz= pos[ix+2] - pos[jx+2];
+      const dist2= dx*dx+ dy*dy+ dz*dz;
+      if(dist2<1e-8) continue;
+      const dist= Math.sqrt(dist2);
+      const overlap= dist- bond.restLength;
+      // use bond.currentStrength (which might be degraded)
+      const force= -(bond.currentStrength || bond.strength) * overlap;
+      const nx= dx/dist, ny= dy/dist, nz= dz/dist;
+      vel[ix]   += force* nx;
+      vel[ix+1] += force* ny;
+      vel[ix+2] += force* nz;
+      vel[jx]   -= force* nx;
+      vel[jx+1] -= force* ny;
+      vel[jx+2] -= force* nz;
+    }
+  }
+}
+
+/****************************************************
+ * 9) RENDER BOND LINES
+ ****************************************************/
+function renderBondLines(pos, bonds, linePositions, lineGeo, count){
+  const segs=[];
+  for(let i=0; i<count; i++){
+    const arr= bonds[i];
+    for(let b of arr){
+      if(b.neighbor< i) continue;
+      const j= b.neighbor;
+      segs.push(
+        pos[i*3], pos[i*3+1], pos[i*3+2],
+        pos[j*3], pos[j*3+1], pos[j*3+2]
+      );
+    }
+  }
+  lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(segs,3));
+  lineGeo.attributes.position.needsUpdate= true;
+  lineGeo.setDrawRange(0, segs.length/3);
+}
+
+/****************************************************
+ * 10) ANIMATION
+ ****************************************************/
+function collisionFree(){
+  for(let i=0; i<numFree; i++){
+    const ix=i*3;
+    velocitiesFree[ix+1]+= params.gravityY;
+    positionsFree[ix]   += velocitiesFree[ix];
+    positionsFree[ix+1] += velocitiesFree[ix+1];
+    positionsFree[ix+2] += velocitiesFree[ix+2];
+    if(positionsFree[ix+1]<0){
+      positionsFree[ix+1]=0;
+      velocitiesFree[ix+1]*= -0.5;
+    }
+    velocitiesFree[ix]   *= params.friction;
+    velocitiesFree[ix+1] *= params.friction;
+    velocitiesFree[ix+2] *= params.friction;
+  }
+}
+
+function collisionCube(){
+  const localG= new THREE.Vector3(0,params.gravityY,0).applyQuaternion(rotatingCube.quaternion.clone().invert());
+  for(let i=0; i<numCube; i++){
+    const ix= i*3;
+    velocitiesCube[ix]   += localG.x;
+    velocitiesCube[ix+1] += localG.y;
+    velocitiesCube[ix+2] += localG.z;
+    positionsCube[ix]   += velocitiesCube[ix];
+    positionsCube[ix+1] += velocitiesCube[ix+1];
+    positionsCube[ix+2] += velocitiesCube[ix+2];
+    velocitiesCube[ix]   *= params.friction;
+    velocitiesCube[ix+1] *= params.friction;
+    velocitiesCube[ix+2] *= params.friction;
+  }
+  clampInsideCube(positionsCube, velocitiesCube, numCube, 4);
+}
+
+function animate(){
+  requestAnimationFrame(animate);
+  controls.update();
+
+  // rotate container
+  rotatingCube.rotation.y += 0.002;
+
+  // FREE
+  updateBonds(positionsFree, temperaturesFree, bondsFree, numFree);
+  applyBondForces(positionsFree, velocitiesFree, bondsFree, temperaturesFree, numFree);
+  collisionFree();
+  renderBondLines(positionsFree, bondsFree, bondPositionsFree, bondGeoFree, numFree);
+  freeGeo.attributes.position.needsUpdate= true;
+
+  // CUBE
+  updateBonds(positionsCube, temperaturesCube, bondsCube, numCube);
+  applyBondForces(positionsCube, velocitiesCube, bondsCube, temperaturesCube, numCube);
+  collisionCube();
+  renderBondLines(positionsCube, bondsCube, bondPositionsCube, bondGeoCube, numCube);
+  cubeGeo.attributes.position.needsUpdate= true;
+
+  renderer.render(scene, camera);
+}
+animate();
+
+/****************************************************
+ * 11) RESIZE
+ ****************************************************/
+window.addEventListener('resize', ()=>{
+  camera.aspect= window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/****************************************************
+ * 12) DRAG-ROTATE
+ ****************************************************/
+const raycaster= new THREE.Raycaster();
+const mouse= new THREE.Vector2();
+let isDragging=false;
+let prevMx=0, prevMy=0;
+const rotSpeed=0.01;
+
+function onPointerDown(e){
+  mouse.x= (e.clientX/window.innerWidth)*2-1;
+  mouse.y= -(e.clientY/window.innerHeight)*2+1;
+  raycaster.setFromCamera(mouse, camera);
+  const intersects= raycaster.intersectObject(rotatingCube,false);
+  if(intersects.length>0){
+    isDragging=true;
+    prevMx=e.clientX;
+    prevMy=e.clientY;
+    controls.enabled=false;
+  }
+}
+function onPointerMove(e){
+  if(!isDragging) return;
+  const dx= e.clientX-prevMx;
+  const dy= e.clientY-prevMy;
+  rotatingCube.rotation.y+= dx*rotSpeed;
+  rotatingCube.rotation.x+= dy*rotSpeed;
+  prevMx=e.clientX;
+  prevMy=e.clientY;
+}
+function onPointerUp(){
+  isDragging=false;
+  controls.enabled=true;
+}
+window.addEventListener('pointerdown', onPointerDown);
+window.addEventListener('pointermove', onPointerMove);
+window.addEventListener('pointerup', onPointerUp);
+
+</script>
+</body>
+</html>

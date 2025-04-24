@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Three.js Import Map Example</title>
+
+  <!--
+    The import map tells the browser how to resolve "three" and
+    "three/examples/jsm/controls/OrbitControls" in your JS code.
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.min.js",
+      "three/examples/jsm/controls/OrbitControls": "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/OrbitControls.js",
+      "three/examples/jsm/controls/PointerLockControls": "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/controls/PointerLockControls.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <!-- The canvas will be inserted by the renderer in main.js -->
+  <script type="module" src="hyperPhyzx-p11.js"></script>
+</body>
+</html>

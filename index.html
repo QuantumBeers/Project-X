@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Project X – Scene Explorer</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+      background: #111;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      padding: 20px;
+      background: #222;
+      border-bottom: 1px solid #333;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.5rem;
+    }
+    main {
+      display: flex;
+      flex: 1;
+    }
+    #scene-list {
+      width: 400px;
+      overflow-y: auto;
+      border-right: 1px solid #333;
+      padding: 20px;
+      background: #181818;
+    }
+    #scene-list table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th, td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #444;
+    }
+    a {
+      color: #61dafb;
+      cursor: pointer;
+    }
+    iframe {
+      flex: 1;
+      border: none;
+      background: #000;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🧪 Project DUST – Scene Explorer</h1>
+</header>
+
+<main>
+  <div id="scene-list">
+    <h3>Available Simulations</h3>
+    <div id="table-container">Loading index.json...</div>
+  </div>
+
+  <iframe id="scene-frame" src="" title="Simulation View"></iframe>
+</main>
+
+<script>
+  const sceneFrame = document.getElementById("scene-frame");
+
+  function loadScene(path) {
+    sceneFrame.src = path;
+  }
+
+  fetch("static/index.json")
+    .then(res => res.json())
+    .then(data => {
+      const table = document.createElement("table");
+      table.innerHTML = `
+        <tr>
+          <th>Concept</th>
+          <th>Version</th>
+          <th>Open</th>
+        </tr>
+      `;
+
+      data["$pages"].forEach(([name, path, version, desc]) => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td title="${desc}">${name}</td>
+          <td style="color:#bbb">${version}</td>
+          <td><a onclick="loadScene('static/${path}')">▶ View</a></td>
+        `;
+        table.appendChild(row);
+      });
+
+      document.getElementById("table-container").innerHTML = "";
+      document.getElementById("table-container").appendChild(table);
+    })
+    .catch(err => {
+      document.getElementById("table-container").textContent = "Failed to load index.json";
+      console.error(err);
+    });
+</script>
+
+</body>
+</html>
