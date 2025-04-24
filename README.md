@@ -122,8 +122,3 @@ Project DUST is released under the **MIT License** (see `LICENSE`).
 
 Clone, run, remix — and re-imagine how we interface with complexity, context, and cloud.
 
----
-
-Let me know if you want a section for **SlappAI-specific use cases** (e.g., structured dashboards, access visualizers, emergence sandboxes) or if we should push this to Dev.to, Hacker News, or Reddit to get it circulating.
-
-Because this is *way* more than just a visualizer, brother. This is a node in the real-time graph of internet architecture.
