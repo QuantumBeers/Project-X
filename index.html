@@ -69,14 +69,35 @@
 
 <script>
   const sceneFrame = document.getElementById("scene-frame");
+  let userInteracted = false;
+  let cycleIndex = 0;
+  let scenes = [];
 
   function loadScene(path) {
     sceneFrame.src = path;
   }
 
+  function markUserInteraction() {
+    userInteracted = true;
+    clearInterval(autoCycleInterval);
+  }
+
+  // Setup user interaction detection
+  window.addEventListener("click", markUserInteraction);
+  window.addEventListener("keydown", markUserInteraction);
+
+  const autoCycleInterval = setInterval(() => {
+    if (!userInteracted && scenes.length > 0) {
+      cycleIndex = (cycleIndex + 1) % scenes.length;
+      loadScene("static/" + scenes[cycleIndex][1]);
+    }
+  }, 60000); // 60 seconds
+
   fetch("static/index.json")
     .then(res => res.json())
     .then(data => {
+      scenes = data["$pages"];
+
       const table = document.createElement("table");
       table.innerHTML = `
         <tr>
@@ -86,24 +107,35 @@
         </tr>
       `;
 
-      data["$pages"].forEach(([name, path, version, desc]) => {
+      scenes.forEach(([name, path, version, desc], index) => {
         const row = document.createElement("tr");
         row.innerHTML = `
           <td title="${desc}">${name}</td>
           <td style="color:#bbb">${version}</td>
-          <td><a onclick="loadScene('static/${path}')">▶ View</a></td>
+          <td><a onclick="loadScene('static/${path}'); markUserInteraction();">▶ View</a></td>
         `;
         table.appendChild(row);
       });
 
       document.getElementById("table-container").innerHTML = "";
       document.getElementById("table-container").appendChild(table);
+
+      // 🔭 Auto-load Solar System if present
+      const solarSystemIndex = scenes.findIndex(([name]) => name.toLowerCase().includes("solar"));
+      if (solarSystemIndex !== -1) {
+        cycleIndex = solarSystemIndex;
+        loadScene("static/" + scenes[solarSystemIndex][1]);
+      } else if (scenes.length > 0) {
+        // Fallback to first entry
+        loadScene("static/" + scenes[0][1]);
+      }
     })
     .catch(err => {
       document.getElementById("table-container").textContent = "Failed to load index.json";
       console.error(err);
     });
 </script>
+
 
 </body>
 </html>
