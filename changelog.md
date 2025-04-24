@@ -17,13 +17,13 @@ This changelog documents significant updates to the Project DUST Modular Scene K
 **🔭 Feature Added: Earth Texture Integration**
 - Earth now renders with a realistic surface texture using `MeshStandardMaterial`.
 - Texture path is defined using dot-separated logic:
-  ```
+
   texture: 'assets.solar_system.planets.8081_earthmap10k.jpg'
-  ```
+
 - A custom path resolver converts this format to a valid URL path:
-  ```
+
   "assets/solar_system/planets/8081_earthmap10k.jpg"
-  ```
+
 
 **💡 Update: OS-Agnostic Path Resolution**
 - Introduced a function `resolveTexturePath(dotPath)` that:
