@@ -17,6 +17,7 @@ camera.position.set(0, 300, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
+const textureLoader = new THREE.TextureLoader();
 
 // --------------------------------------------------------------------------------
 //  OrbitControls
@@ -74,7 +75,7 @@ const planetData = [
   // name,   semi-major axis (AU), eccentricity, color,    radius(km), inclination(deg)
   { name: 'Mercury', a: 0.39,   e: 0.2056, color: 0xaaaaaa, radius: 2440,  inclination: 7.0 },
   { name: 'Venus',   a: 0.723,  e: 0.0068, color: 0xffff99, radius: 6052,  inclination: 3.39 },
-  { name: 'Earth',   a: 1.0,    e: 0.0167, color: 0x0055ff, radius: 6371,  inclination: 0.0 },
+  { name: 'Earth',   a: 1.0,    e: 0.0167, color: 0x0055ff, radius: 6371,  inclination: 0.0 , texture: 'assets.solar_system.planets.8081_earthmap10k.jpg'},
   { name: 'Mars',    a: 1.524,  e: 0.0934, color: 0xff3300, radius: 3390,  inclination: 1.85 },
   { name: 'Jupiter', a: 5.203,  e: 0.0489, color: 0xff9933, radius: 69911, inclination: 1.303 },
   { name: 'Saturn',  a: 9.537,  e: 0.0539, color: 0xffff33, radius: 58232, inclination: 2.488 },
@@ -95,7 +96,30 @@ planetData.forEach((p) => {
   // Planet sphere
   const planetRadius = (p.radius / 6371) * planetSizeScale; 
   const geom = new THREE.SphereGeometry(planetRadius, 32, 32);
-  const mat = new THREE.MeshStandardMaterial({ color: p.color });
+  let mat;
+
+  if (p.texture) {
+        // Convert "assets.solar_system.planets.8081_earthmap10k.jpg" to "assets/solar_system/planets/8081_earthmap10k.jpg"
+    function resolveTexturePath(dotPath) {
+      const parts = dotPath.split('.');
+      const ext = parts.pop(); // e.g., 'jpg'
+      const filename = parts.pop(); // e.g., '8081_earthmap10k'
+      const path = parts.join('/'); // folder path
+      return `${path}/${filename}.${ext}`;
+    }
+
+    const resolvedPath = resolveTexturePath(p.texture);
+    const tex = textureLoader.load(resolvedPath);
+
+    mat = new THREE.MeshStandardMaterial({
+      map: tex,
+      roughness: 1,
+      metalness: 0,
+    });
+  } else {
+    mat = new THREE.MeshStandardMaterial({ color: p.color });
+  }
+
   const mesh = new THREE.Mesh(geom, mat);
   orbitGroup.add(mesh);
 
