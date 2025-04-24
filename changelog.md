@@ -2,7 +2,15 @@
 
 This changelog documents significant updates to the Project DUST Modular Scene Kernel, with a focus on feature additions, architecture changes, and conceptual milestones.
 
----
+
+```markdown
+## [v0.2.1] – 2025-04-24
+
+**📦 Protocol Defined: CANP (Contextual Asset Naming Protocol)**
+- Introduced `CANP.md` as the formal specification.
+- CANP enables structured, OS-agnostic asset referencing via dot-path semantics.
+- Added `resolveCANP()` utility logic to support runtime resolution of semantic paths.
+- Now used in Solar System simulation to load Earth texture from:
 
 ## [v0.2.0] – 2025-04-24
 
