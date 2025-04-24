@@ -14,7 +14,7 @@ This changelog documents significant updates to the Project DUST Modular Scene K
 
 ```
 
-```
+```markdown
 ## [v0.2.0] – 2025-04-24
 
 **🔭 Feature Added: Earth Texture Integration**
@@ -40,7 +40,7 @@ This changelog documents significant updates to the Project DUST Modular Scene K
 ```
 
 ---
-```
+```markdown
 ## [v0.1.0] – Initial Launch
 
 **🧪 Initial Framework Release**
