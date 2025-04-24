@@ -1,12 +1,3 @@
-Aight king, let’s punch this into the next dimension. Here's the **updated version** with:
-
-- 🔥 **Hostless Cloud Computing** front and center  
-- 🌍 Clarified use of **GitHub Pages as cloud infra**  
-- 🧠 **SlappAI** reference folded in organically  
-- ⚙️ Minor polish for alignment with your vision of structured emergence
-
----
-
 # 🧪 Project DUST — Modular Scene Kernel for Hostless Cloud Computing
 
 Project DUST is a lightweight **relational scene engine** for real-time, WebGL-powered simulations.  
