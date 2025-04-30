@@ -1,5 +1,5 @@
-import * as THREE from './js/three.module.js';
-import { OrbitControls } from './js/OrbitControls.js';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 
 // --------------------------------------------------------------------------------
 //  Basic Scene, Camera, Renderer
@@ -245,4 +245,4 @@ function focusOnBody(name) {
   }
 
   controls.update();
-}
+} 
